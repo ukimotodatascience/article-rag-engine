@@ -1,0 +1,7 @@
+.env
+.venv
+index_state.json
+.infisical.json
+models/
+__pycache__/
+data/

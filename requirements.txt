@@ -3,8 +3,10 @@ qdrant-client
 sentence-transformers
 transformers
 torch
+torchvision
+accelerate
+Pillow
 python-dotenv
 requests
 fastembed
 janome
-torchvision

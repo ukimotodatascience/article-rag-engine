@@ -1,0 +1,7 @@
+streamlit
+qdrant-client
+sentence-transformers
+transformers
+torch
+python-dotenv
+requests

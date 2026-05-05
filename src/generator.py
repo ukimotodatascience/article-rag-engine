@@ -9,7 +9,8 @@ models_dir = project_root / "models"
 os.makedirs(models_dir, exist_ok=True)
 os.environ["HF_HOME"] = str(models_dir)
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer, TextIteratorStreamer
+from threading import Thread
 import config
 
 class LocalLLMGenerator:
@@ -103,3 +104,61 @@ class LocalLLMGenerator:
         except Exception as e:
             print(f"\nエラーが発生しました: {e}")
             return ""
+
+    def generate_stream(self, query: str, retrieved_points: list):
+        """
+        検索結果のコンテキストを元に、LLMに回答を生成させます。
+        ストリーミング形式でトークンを逐次 yield します（Streamlit用）。
+        """
+        # 1. 検索結果からコンテキストテキストを組み立てる
+        context_texts = []
+        for i, point in enumerate(retrieved_points):
+            payload = point.payload
+            title = payload.get('title', '無題')
+            source = payload.get('source', '不明')
+            text = payload.get('text', '')
+            context_texts.append(f"[資料 {i+1}] タイトル: {title} (ファイル: {source})\n{text}")
+            
+        context_str = "\n\n".join(context_texts)
+        
+        # 2. プロンプトの作成
+        system_prompt = (
+            "あなたは優秀なアシスタントです。提供された参考資料を元に、ユーザーの質問に正確に答えてください。\n"
+            "参考資料に記載されていないことは「資料には記載がありません」と答え、推測で回答しないでください。"
+        )
+        
+        user_prompt = f"【参考資料】\n{context_str}\n\n【質問】\n{query}"
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        prompt_text = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+
+        inputs = self.tokenizer(prompt_text, return_tensors="pt").to(self.device)
+        
+        # TextIteratorStreamerの初期化
+        streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
+        
+        # 推論を別スレッドで実行
+        generation_kwargs = dict(
+            **inputs,
+            max_new_tokens=config.LLM_MAX_NEW_TOKENS,
+            temperature=config.LLM_TEMPERATURE,
+            top_p=0.9,
+            repetition_penalty=1.1,
+            streamer=streamer,
+            pad_token_id=self.tokenizer.eos_token_id
+        )
+        
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
+        
+        # トークンを逐次返す
+        for new_text in streamer:
+            yield new_text

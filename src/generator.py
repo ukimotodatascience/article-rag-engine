@@ -38,8 +38,8 @@ class LocalLLMGenerator:
             # 取得失敗時はデフォルトモデルのみを返す
             return [self.model_name]
 
-    def _prepare_messages(self, query: str, retrieved_points: list) -> list:
-        """検索結果からプロンプト用メッセージを作成します"""
+    def _prepare_messages(self, query: str, retrieved_points: list, chat_history: list = None) -> list:
+        """検索結果とチャット履歴からプロンプト用メッセージを作成します"""
         context_texts = []
         for i, point in enumerate(retrieved_points):
             payload = point.payload
@@ -55,19 +55,28 @@ class LocalLLMGenerator:
             "参考資料に記載されていないことは「資料には記載がありません」と答え、推測で回答しないでください。"
         )
         
+        # メッセージリストの初期化
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # チャット履歴がある場合は追加（直近10件程度に制限することも検討可能）
+        if chat_history:
+            for msg in chat_history:
+                # ロールが 'user' または 'assistant' であることを確認
+                if msg["role"] in ["user", "assistant"]:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        # 最新の質問とコンテキストを追加
         user_prompt = f"【参考資料】\n{context_str}\n\n【質問】\n{query}"
+        messages.append({"role": "user", "content": user_prompt})
 
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
+        return messages
 
-    def generate(self, query: str, retrieved_points: list, model_name: str = None) -> str:
+    def generate(self, query: str, retrieved_points: list, chat_history: list = None, model_name: str = None) -> str:
         """
         標準出力にストリーミングしながら最終的な回答を返します。
         """
         target_model = model_name or self.model_name
-        messages = self._prepare_messages(query, retrieved_points)
+        messages = self._prepare_messages(query, retrieved_points, chat_history)
         full_response = ""
         
         print(f"\n[{target_model}] 回答を生成中...\n")
@@ -103,12 +112,12 @@ class LocalLLMGenerator:
             print(f"\nエラーが発生しました: {e}")
             return f"エラーが発生しました: {e}"
 
-    def generate_stream(self, query: str, retrieved_points: list, model_name: str = None):
+    def generate_stream(self, query: str, retrieved_points: list, chat_history: list = None, model_name: str = None):
         """
         Streamlit 用にトークンを逐次 yield します。
         """
         target_model = model_name or self.model_name
-        messages = self._prepare_messages(query, retrieved_points)
+        messages = self._prepare_messages(query, retrieved_points, chat_history)
         
         try:
             payload = {
@@ -120,7 +129,7 @@ class LocalLLMGenerator:
                     "num_predict": config.LLM_MAX_NEW_TOKENS
                 }
             }
-            response = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=10)
+            response = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=30)
             
             if response.status_code != 200:
                 error_msg = f"Ollamaエラー ({response.status_code}): {response.text}"

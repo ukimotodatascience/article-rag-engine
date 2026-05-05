@@ -20,7 +20,7 @@ OLLAMA_MODEL_NAME = os.environ.get("OLLAMA_MODEL_NAME")
 LLM_TEMPERATURE = 0.3
 
 # LLMが生成できる最大文字数(トークン数)
-LLM_MAX_NEW_TOKENS = 512
+LLM_MAX_NEW_TOKENS = 5120000
 
 # ------------------------------------------
 # 2. 検索 (Retriever) 設定
@@ -51,3 +51,9 @@ DENSE_VECTOR_SIZE = 768
 
 # エンベディングモデルの最大入力長（e5-baseは512）
 EMBEDDING_MAX_LENGTH = 512
+
+# ------------------------------------------
+# 5. セッション (Session) 設定
+# ------------------------------------------
+# セッション履歴を保存するディレクトリ
+SESSIONS_DIR = "data/sessions"

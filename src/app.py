@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from retriever import HybridRetriever
 from generator import LocalLLMGenerator
+from session_manager import SessionManager
 import config
 
 # ページ設定
@@ -16,8 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
-# カスタムCSSでプレミアムなデザインを実現
+# カスタムCSS
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@300;500;700&display=swap');
@@ -49,7 +49,6 @@ st.markdown(f"""
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }}
 
-    /* タイポグラフィ */
     h1, h2, h3 {{
         font-family: 'Outfit', sans-serif;
         font-weight: 700;
@@ -58,54 +57,24 @@ st.markdown(f"""
         -webkit-text-fill-color: transparent;
     }}
 
-    /* チャットメッセージの調整 */
     .stChatMessage {{
         background: rgba(255, 255, 255, 0.03) !important;
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
         border-radius: 12px !important;
         padding: 1rem !important;
         margin-bottom: 1rem !important;
-        transition: transform 0.2s ease;
     }}
 
-    .stChatMessage:hover {{
-        transform: translateY(-2px);
-        background: rgba(255, 255, 255, 0.05) !important;
-    }}
-
-    /* サイドバー */
     [data-testid="stSidebar"] {{
         background-color: #1e293b;
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
     }}
 
-    /* ボタン・入力欄 */
     .stButton > button {{
         border-radius: 8px;
         background: linear-gradient(90deg, var(--primary), var(--secondary));
         color: white;
         border: none;
-        padding: 0.5rem 1rem;
         font-weight: 600;
-        transition: all 0.3s ease;
-    }}
-
-    .stButton > button:hover {{
-        opacity: 0.9;
-        box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
-    }}
-
-    .stChatInputContainer {{
-        background-color: var(--surface) !important;
-        border-radius: 16px !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    }}
-
-    /* 引用ソースのスタイリング */
-    .source-container {{
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
     }}
 
     .source-card {{
@@ -114,115 +83,93 @@ st.markdown(f"""
         border-radius: 8px;
         padding: 12px;
         font-size: 0.9rem;
-    }}
-
-    .source-header {{
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 8px;
-    }}
-
-    .source-title {{
-        font-weight: 600;
-        color: #e2e8f0;
-    }}
-
-    .source-tag {{
-        font-size: 0.7rem;
-        background: rgba(99, 102, 241, 0.2);
-        color: #818cf8;
-        padding: 2px 8px;
-        border-radius: 4px;
-        text-transform: uppercase;
-    }}
-
-    /* アニメーション */
-    @keyframes fadeIn {{
-        from {{ opacity: 0; transform: translateY(10px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-
-    .fade-in {{
-        animation: fadeIn 0.5s ease forwards;
+        margin-bottom: 10px;
     }}
 </style>
 """, unsafe_allow_html=True)
 
 @st.cache_resource
 def get_components():
-    """RAGコンポーネントの初期化とキャッシュ"""
+    """RAGコンポーネントの初期化"""
     with st.spinner("✨ 知識エンジンを起動中..."):
         retriever = HybridRetriever()
         generator = LocalLLMGenerator()
-    return retriever, generator
+        session_manager = SessionManager()
+    return retriever, generator, session_manager
 
 def main():
-    # ヘッダーセクション（画像を削除しコンパクトに）
-    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-    col1, col2 = st.columns([0.1, 0.9])
-    with col1:
-        st.markdown("### 🧬")
-    with col2:
-        st.title("InsightArc")
-    st.markdown("*Transforming Notion knowledge into intelligence.*")
-    st.markdown('</div>', unsafe_allow_html=True)
-
     # コンポーネントの取得
     try:
-        retriever, generator = get_components()
+        retriever, generator, session_manager = get_components()
     except Exception as e:
         st.error(f"初期化中にエラーが発生しました: {e}")
         return
 
-    # サイドバー設定
-    with st.sidebar:
-        st.markdown("### 🛠️ System Control")
-        
-        # 接続ステータスをバッジ風に表示
-        is_ollama_online = generator.is_connected()
-        if is_ollama_online:
-            st.markdown('<span style="color: #4ade80; font-weight: bold;">● OLLAMA ONLINE</span>', unsafe_allow_html=True)
+    # セッション状態の初期化
+    if "current_session_id" not in st.session_state:
+        sessions = session_manager.list_sessions()
+        if sessions:
+            st.session_state.current_session_id = sessions[0]["id"]
         else:
-            st.markdown('<span style="color: #f87171; font-weight: bold;">○ OLLAMA OFFLINE</span>', unsafe_allow_html=True)
-            st.info(f"URL: {config.OLLAMA_BASE_URL}")
+            st.session_state.current_session_id = session_manager.create_session()
+    
+    # 現在のセッションデータの読み込み
+    session_data = session_manager.load_session(st.session_state.current_session_id)
+    if not session_data:
+        # 万が一読み込めない場合は新規作成
+        st.session_state.current_session_id = session_manager.create_session()
+        session_data = session_manager.load_session(st.session_state.current_session_id)
+
+    st.session_state.messages = session_data.get("messages", [])
+    st.session_state.last_retrieved = session_data.get("last_retrieved", [])
+
+    # サイドバー
+    with st.sidebar:
+        st.title("🧬 InsightArc")
+        
+        # 接続ステータス
+        is_ollama_online = generator.is_connected()
+        status_color = "#4ade80" if is_ollama_online else "#f87171"
+        status_text = "OLLAMA ONLINE" if is_ollama_online else "OLLAMA OFFLINE"
+        st.markdown(f'<span style="color: {status_color}; font-weight: bold; font-size: 0.8rem;">● {status_text}</span>', unsafe_allow_html=True)
         
         st.divider()
         
-        with st.expander("🧠 Model Configuration", expanded=True):
+        # セッション管理
+        if st.button("＋ New Chat", use_container_width=True):
+            st.session_state.current_session_id = session_manager.create_session()
+            st.rerun()
+            
+        st.markdown("### 💬 Recent Chats")
+        sessions = session_manager.list_sessions()
+        for s in sessions:
+            col1, col2 = st.columns([0.8, 0.2])
+            is_active = s["id"] == st.session_state.current_session_id
+            
+            with col1:
+                if st.button(f"{s['name'][:20]}...", key=f"sel_{s['id']}", use_container_width=True, help=s['name']):
+                    st.session_state.current_session_id = s["id"]
+                    st.rerun()
+            with col2:
+                if st.button("🗑️", key=f"del_{s['id']}", help="Delete session"):
+                    session_manager.delete_session(s["id"])
+                    if st.session_state.current_session_id == s["id"]:
+                        st.session_state.pop("current_session_id")
+                    st.rerun()
+
+        st.divider()
+        
+        with st.expander("⚙️ Settings"):
             available_models = generator.get_available_models()
             default_index = available_models.index(config.OLLAMA_MODEL_NAME) if config.OLLAMA_MODEL_NAME in available_models else 0
-            
-            selected_model = st.selectbox(
-                "Active Model",
-                available_models,
-                index=default_index,
-                help="Ollamaにインストールされているモデルを選択します"
-            )
-            
-            if st.button("Refresh Models", use_container_width=True):
-                st.rerun()
-        
-        with st.expander("🔍 Search Parameters"):
+            selected_model = st.selectbox("Active Model", available_models, index=default_index)
             limit = st.slider("Context Chunks", 1, 10, config.RETRIEVER_LIMIT)
-        
-        st.divider()
-        if st.button("🗑️ Clear Chat History", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.last_retrieved = []
-            st.rerun()
-        
-        st.markdown("---")
-        st.caption("v1.2.0 | Powered by E5 & Ollama")
 
-    # セッション状態の初期化
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "last_retrieved" not in st.session_state:
-        st.session_state.last_retrieved = []
-
-    # メインチャットエリア
-    chat_container = st.container()
+    # メインエリア
+    st.title(session_data.get("name", "New Chat"))
     
+    # チャット履歴表示
+    chat_container = st.container()
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -230,7 +177,7 @@ def main():
 
     # ユーザー入力
     if prompt := st.chat_input("Ask anything from your library..."):
-        # ユーザーメッセージ
+        # ユーザーメッセージ追加
         st.session_state.messages.append({"role": "user", "content": prompt})
         with chat_container:
             with st.chat_message("user"):
@@ -239,52 +186,56 @@ def main():
         # 回答生成
         with chat_container:
             with st.chat_message("assistant"):
-                # 検索フェーズ
-                with st.status("🔍 Digging through articles...", expanded=False) as status:
+                with st.status("🔍 Searching articles...", expanded=False) as status:
+                    # 検索
                     results = retriever.search(prompt, limit=limit)
-                    st.session_state.last_retrieved = results
-                    if results:
-                        status.update(label=f"🎯 Found {len(results)} relevant articles", state="complete")
-                    else:
-                        status.update(label="❓ No specific context found", state="error")
+                    
+                    # JSONシリアライズ可能な形式に変換して保存
+                    st.session_state.last_retrieved = [
+                        {
+                            "payload": point.payload,
+                            "score": float(point.score)
+                        }
+                        for point in results
+                    ]
+                    status.update(label=f"🎯 Found {len(results)} relevant chunks", state="complete")
                 
-                # 生成フェーズ
                 response_placeholder = st.empty()
                 full_response = ""
                 
-                if results:
-                    for token in generator.generate_stream(prompt, results, model_name=selected_model):
-                        full_response += token
-                        response_placeholder.markdown(full_response + "▌")
-                    response_placeholder.markdown(full_response)
-                else:
-                    full_response = "I couldn't find any specific information in your articles to answer this accurately."
-                    response_placeholder.markdown(full_response)
+                # 生成時にチャット履歴を渡す
+                history = st.session_state.messages[:-1]
+                
+                # results (ScoredPoint) をそのまま generator に渡す
+                for token in generator.generate_stream(prompt, results, chat_history=history, model_name=selected_model):
+                    full_response += token
+                    response_placeholder.markdown(full_response + "▌")
+                response_placeholder.markdown(full_response)
                 
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
+                # セッション保存
+                session_manager.save_session(
+                    st.session_state.current_session_id, 
+                    st.session_state.messages,
+                    last_retrieved=st.session_state.last_retrieved
+                )
+                st.rerun()
 
-    # 参考資料の表示（フローティング的なカード形式）
+    # 参考資料の表示
     if st.session_state.last_retrieved:
         st.divider()
         st.subheader("📚 Supporting References")
-        
-        # カラムで並べる
         cols = st.columns(min(3, len(st.session_state.last_retrieved)))
         for i, point in enumerate(st.session_state.last_retrieved):
             with cols[i % len(cols)]:
-                payload = point.payload
-                title = payload.get('title', 'Untitled')
-                source = payload.get('source', 'Unknown')
-                text = payload.get('text', '')[:200] + "..." # 抜粋
-                
+                # point は辞書形式になっている
+                payload = point.get("payload", {})
                 st.markdown(f"""
                 <div class="source-card">
-                    <div class="source-header">
-                        <span class="source-title">#{i+1} {title[:20]}</span>
-                        <span class="source-tag">Source</span>
-                    </div>
-                    <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px;">{source[:30]}</div>
-                    <div style="color: #cbd5e1; font-style: italic;">"{text}"</div>
+                    <div style="font-weight:600; color:#e2e8f0; margin-bottom:4px;">#{i+1} {payload.get('title', 'Untitled')[:25]}</div>
+                    <div style="font-size:0.7rem; color:#94a3b8; margin-bottom:8px;">{payload.get('source', 'Unknown')[:35]}</div>
+                    <div style="color:#cbd5e1; font-style:italic; font-size:0.85rem;">"{payload.get('text', '')[:150]}..."</div>
                 </div>
                 """, unsafe_allow_html=True)
 

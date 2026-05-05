@@ -3,10 +3,11 @@ qdrant-client
 sentence-transformers
 transformers
 torch
-torchvision
+torchvision>=0.15.0
 accelerate
 Pillow
 python-dotenv
 requests
 fastembed
 janome
+numpy

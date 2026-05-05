@@ -5,3 +5,5 @@ transformers
 torch
 python-dotenv
 requests
+fastembed
+janome

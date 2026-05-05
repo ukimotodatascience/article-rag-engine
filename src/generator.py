@@ -10,15 +10,19 @@ class LocalLLMGenerator:
         self.model_name = model_name
         self.base_url = config.OLLAMA_BASE_URL
         
-        # Ollama の接続確認
+        # Ollama の接続確認 (初期化時)
+        self.is_connected()
+
+    def is_connected(self) -> bool:
+        """Ollama サーバーに接続可能か確認します"""
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=30)
+            # 接続確認用のタイムアウトは短めに設定 (5秒)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             if response.status_code == 200:
-                print(f"✅ Ollama サーバーに接続しました ({self.base_url})")
-            else:
-                print(f"⚠️ Ollama サーバーからの応答が異常です: {response.status_code}")
-        except Exception as e:
-            print(f"⚠️ Ollama サーバー ({self.base_url}) との通信で待機中、または接続できません: {e}")
+                return True
+            return False
+        except:
+            return False
 
     def get_available_models(self) -> list:
         """Ollama で利用可能なモデル一覧を取得します"""
@@ -58,19 +62,20 @@ class LocalLLMGenerator:
             {"role": "user", "content": user_prompt}
         ]
 
-    def generate(self, query: str, retrieved_points: list) -> str:
+    def generate(self, query: str, retrieved_points: list, model_name: str = None) -> str:
         """
         標準出力にストリーミングしながら最終的な回答を返します。
         """
+        target_model = model_name or self.model_name
         messages = self._prepare_messages(query, retrieved_points)
         full_response = ""
         
-        print(f"\n[{self.model_name}] 回答を生成中...\n")
+        print(f"\n[{target_model}] 回答を生成中...\n")
         print("-" * 50)
         
         try:
             payload = {
-                "model": self.model_name,
+                "model": target_model,
                 "messages": messages,
                 "stream": True,
                 "options": {
@@ -98,15 +103,16 @@ class LocalLLMGenerator:
             print(f"\nエラーが発生しました: {e}")
             return f"エラーが発生しました: {e}"
 
-    def generate_stream(self, query: str, retrieved_points: list):
+    def generate_stream(self, query: str, retrieved_points: list, model_name: str = None):
         """
         Streamlit 用にトークンを逐次 yield します。
         """
+        target_model = model_name or self.model_name
         messages = self._prepare_messages(query, retrieved_points)
         
         try:
             payload = {
-                "model": self.model_name,
+                "model": target_model,
                 "messages": messages,
                 "stream": True,
                 "options": {
@@ -114,16 +120,25 @@ class LocalLLMGenerator:
                     "num_predict": config.LLM_MAX_NEW_TOKENS
                 }
             }
-            response = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True)
-            response.raise_for_status()
+            response = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=10)
+            
+            if response.status_code != 200:
+                error_msg = f"Ollamaエラー ({response.status_code}): {response.text}"
+                yield error_msg
+                return
 
             for line in response.iter_lines():
                 if line:
                     chunk = json.loads(line)
+                    if "error" in chunk:
+                        yield f"Ollamaエラー: {chunk['error']}"
+                        return
                     if "message" in chunk and "content" in chunk["message"]:
                         yield chunk["message"]["content"]
                     if chunk.get("done"):
                         break
                         
+        except requests.exceptions.Timeout:
+            yield "エラー: Ollama サーバーへの接続がタイムアウトしました。サーバーが起動しているか、ポート番号が正しいか確認してください。"
         except Exception as e:
-            yield f"エラーが発生しました: {e}"
+            yield f"予期せぬエラーが発生しました: {e}"

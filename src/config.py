@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Ollama (回答生成) 設定
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "gpt-oss:latest")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL")
+OLLAMA_MODEL_NAME = os.environ.get("OLLAMA_MODEL_NAME")
 
 # 回答のランダム性 (0.0に近いほど事実重視、1.0に近いほど創造的になるが嘘が混じりやすい)
 LLM_TEMPERATURE = 0.3

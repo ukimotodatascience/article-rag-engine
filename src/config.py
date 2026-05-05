@@ -6,8 +6,15 @@
 # ------------------------------------------
 # 1. LLM (回答生成) 設定
 # ------------------------------------------
-# ローカルで動かすHugging Faceのモデル名
-LLM_MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
+import os
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
+
+# Ollama (回答生成) 設定
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "gpt-oss:latest")
 
 # 回答のランダム性 (0.0に近いほど事実重視、1.0に近いほど創造的になるが嘘が混じりやすい)
 LLM_TEMPERATURE = 0.3

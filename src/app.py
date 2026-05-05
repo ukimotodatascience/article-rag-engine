@@ -69,10 +69,35 @@ def main():
     st.title("📚 Article RAG Engine")
     st.markdown("Notionに保存された技術記事から回答を生成するAIアシスタントです。")
 
+    # コンポーネントの取得
+    try:
+        retriever, generator = get_components()
+    except Exception as e:
+        st.error(f"初期化中にエラーが発生しました: {e}")
+        return
+
     # サイドバー設定
     with st.sidebar:
         st.header("⚙️ 設定")
-        st.info("このシステムはローカルLLM (Qwen2.5) を使用して回答を生成します。")
+        st.info("このシステムは Ollama を使用して回答を生成します。")
+        
+        st.divider()
+        st.subheader("LLM 設定")
+        
+        # 利用可能なモデルを取得
+        available_models = generator.get_available_models()
+        if config.OLLAMA_MODEL_NAME in available_models:
+            default_index = available_models.index(config.OLLAMA_MODEL_NAME)
+        else:
+            default_index = 0
+            
+        selected_model = st.selectbox(
+            "使用するモデル",
+            available_models,
+            index=default_index
+        )
+        # 選択されたモデルを反映
+        generator.model_name = selected_model
         
         st.divider()
         st.subheader("検索パラメータ")
@@ -89,13 +114,6 @@ def main():
     
     if "last_retrieved" not in st.session_state:
         st.session_state.last_retrieved = []
-
-    # コンポーネントの取得
-    try:
-        retriever, generator = get_components()
-    except Exception as e:
-        st.error(f"初期化中にエラーが発生しました: {e}")
-        return
 
     # チャット履歴の表示
     for message in st.session_state.messages:

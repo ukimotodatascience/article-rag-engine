@@ -50,7 +50,7 @@ pip install -r requirements.txt
 `.env.example` を参考に `.env` ファイルを作成するか、Infisicalに以下の変数を設定してください。
 
 ```env
-NOTION_API_KEY=your_notion_key
+NOTION_TOKEN=your_notion_token
 NOTION_DATABASE_ID=your_database_id
 QDRANT_URL=your_qdrant_url
 QDRANT_API_KEY=your_qdrant_api_key

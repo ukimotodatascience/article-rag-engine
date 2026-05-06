@@ -11,3 +11,4 @@ requests
 fastembed
 janome
 numpy
+langchain-text-splitters

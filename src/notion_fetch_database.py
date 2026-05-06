@@ -138,6 +138,18 @@ if __name__ == "__main__":
     output_dir = "data"
     os.makedirs(output_dir, exist_ok=True)
 
+    # 前回の実行時刻を取得
+    last_sync_time = 0
+    if os.path.exists("last_update.txt"):
+        try:
+            with open("last_update.txt", "r", encoding="utf-8") as f:
+                last_sync_str = f.read().strip()
+                if last_sync_str:
+                    last_sync_time = datetime.strptime(last_sync_str, "%Y-%m-%d %H:%M:%S").timestamp()
+                    print(f"🕒 前回の同期時刻: {last_sync_str}")
+        except Exception as e:
+            print(f"⚠️ last_update.txt の読み込みに失敗しました: {e}")
+
     for page in pages:
         page_id = page["id"]
         title = get_page_title(page)
@@ -146,17 +158,17 @@ if __name__ == "__main__":
         
         output_filename = os.path.join(output_dir, f"{safe_title}.md")
         
-        # 差分チェック：ローカルファイルの更新日時とNotionの最終更新日時を比較
-        if os.path.exists(output_filename):
-            local_mtime = os.path.getmtime(output_filename)
-            notion_time_str = page.get("last_edited_time", "").replace("Z", "+00:00")
-            if notion_time_str:
-                notion_mtime = datetime.fromisoformat(notion_time_str).timestamp()
-                
-                # Notionの更新がローカルファイルの更新より古ければスキップ
-                if notion_mtime <= local_mtime:
-                    print(f"スキップ: {title}")
-                    continue
+        # 差分チェック：Notionの最終更新日時と前回のシステム同期時刻を比較
+        local_file_exists = os.path.exists(output_filename)
+        notion_time_str = page.get("last_edited_time", "").replace("Z", "+00:00")
+        
+        if notion_time_str:
+            notion_mtime = datetime.fromisoformat(notion_time_str).timestamp()
+            
+            # Notionの更新が前回の同期時刻以前で、かつローカルファイルが存在すればスキップ
+            if local_file_exists and notion_mtime <= last_sync_time:
+                print(f"スキップ: {title}")
+                continue
 
         try:
             blocks = get_block_children(page_id)

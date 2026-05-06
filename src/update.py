@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import time
+from datetime import datetime
 
 def run_step(name, script_name):
     """
@@ -50,6 +51,8 @@ def main():
     print("✨" * 20)
     
     total_start_time = time.time()
+    # 記録用の開始時刻文字列（成功時に最後に保存する）
+    start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # 1. Notionからデータを取得
     if not run_step("Notionデータ取得", "notion_fetch_database.py"):
@@ -62,6 +65,15 @@ def main():
         sys.exit(1)
         
     total_duration = time.time() - total_start_time
+    
+    # 実行開始時刻（start_time_str）をファイルに記録
+    try:
+        with open("last_update.txt", "w", encoding="utf-8") as f:
+            f.write(start_time_str)
+        print(f"🕒 システム更新時刻を記録しました: {start_time_str}")
+    except Exception as e:
+        print(f"⚠️ システム更新時刻の記録に失敗しました: {e}")
+
     print(f"\n{'*'*60}")
     print(f"🎉 すべての更新プロセスが正常に完了しました！")
     print(f"📊 総所要時間: {total_duration:.2f}秒")

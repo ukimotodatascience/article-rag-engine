@@ -2,6 +2,7 @@ import streamlit as st
 import time
 import os
 import base64
+import html
 from pathlib import Path
 from dotenv import load_dotenv
 from retriever import HybridRetriever
@@ -226,18 +227,24 @@ def main():
     if st.session_state.last_retrieved:
         st.divider()
         st.subheader("📚 Supporting References")
-        cols = st.columns(min(3, len(st.session_state.last_retrieved)))
-        for i, point in enumerate(st.session_state.last_retrieved):
-            with cols[i % len(cols)]:
-                # point は辞書形式になっている
-                payload = point.get("payload", {})
-                st.markdown(f"""
-                <div class="source-card">
-                    <div style="font-weight:600; color:#e2e8f0; margin-bottom:4px;">#{i+1} {payload.get('title', 'Untitled')[:25]}</div>
-                    <div style="font-size:0.7rem; color:#94a3b8; margin-bottom:8px;">{payload.get('source', 'Unknown')[:35]}</div>
-                    <div style="color:#cbd5e1; font-style:italic; font-size:0.85rem;">"{payload.get('text', '')[:150]}..."</div>
-                </div>
-                """, unsafe_allow_html=True)
+        
+        # 重複を排除（同じ記事の複数チャンクがヒットした場合）
+        unique_refs = []
+        seen_titles = set()
+        for point in st.session_state.last_retrieved:
+            payload = point.get("payload", {})
+            title = payload.get('title', 'Untitled')
+            url = payload.get('url', '')
+            if title not in seen_titles:
+                unique_refs.append({"title": title, "url": url})
+                seen_titles.add(title)
+
+        for i, ref in enumerate(unique_refs):
+            safe_title = html.escape(ref['title'])
+            if ref['url']:
+                st.markdown(f"**{i+1}. {safe_title}** — [{ref['url']}]({ref['url']})")
+            else:
+                st.markdown(f"**{i+1}. {safe_title}**")
 
 if __name__ == "__main__":
     main()

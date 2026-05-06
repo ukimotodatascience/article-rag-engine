@@ -1,5 +1,6 @@
 import os
 import glob
+import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import config
 
@@ -14,10 +15,16 @@ def load_markdown_files(data_dir: str) -> list[dict]:
             # ファイル名からタイトルを推測（拡張子を除去）
             filename = os.path.basename(file_path)
             title = os.path.splitext(filename)[0]
+            
+            # URLを抽出 (<!-- URL: ... -->)
+            url_match = re.search(r"<!-- URL:\s*(.*?)\s*-->", content)
+            url = url_match.group(1) if url_match else ""
+
             documents.append({
                 "title": title,
                 "content": content,
-                "source": file_path
+                "source": file_path,
+                "url": url
             })
     return documents
 
@@ -55,6 +62,7 @@ def process_documents(documents: list[dict], chunk_size: int = 400, chunk_overla
                 "metadata": {
                     "source": doc["source"],
                     "title": doc["title"],
+                    "url": doc.get("url", ""),
                     "chunk_index": i
                 }
             })

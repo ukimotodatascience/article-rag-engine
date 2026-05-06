@@ -182,6 +182,7 @@ def main():
                         "text": chunk["text"],
                         "source": chunk["metadata"]["source"], # ファイル名のみに上書きされた値
                         "title": chunk["metadata"]["title"],
+                        "url": chunk["metadata"].get("url", ""),
                         "chunk_id": chunk["chunk_id"],
                         "chunk_index": chunk["metadata"]["chunk_index"],
                     }

@@ -41,7 +41,15 @@ def query_database(database_id: str) -> list[dict]:
                             "equals": "Zenn"
                         }
                     }
-                }
+                },
+                {
+                    "property": "媒体",
+                    "formula": {
+                        "string": {
+                            "equals": "note"
+                        }
+                    }
+                },
             ]
         }
     }

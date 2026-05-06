@@ -9,6 +9,7 @@ class LocalLLMGenerator:
         """
         self.model_name = model_name
         self.base_url = config.OLLAMA_BASE_URL
+        self.last_done_reason = None
         
         # Ollama の接続確認 (初期化時)
         self.is_connected()
@@ -71,13 +72,14 @@ class LocalLLMGenerator:
 
         return messages
 
-    def generate(self, query: str, retrieved_points: list, chat_history: list = None, model_name: str = None) -> str:
+    def generate(self, query: str, retrieved_points: list, chat_history: list = None, model_name: str = None, max_new_tokens: int = None) -> str:
         """
         標準出力にストリーミングしながら最終的な回答を返します。
         """
         target_model = model_name or self.model_name
         messages = self._prepare_messages(query, retrieved_points, chat_history)
         full_response = ""
+        self.last_done_reason = None
         
         print(f"\n[{target_model}] 回答を生成中...\n")
         print("-" * 50)
@@ -89,7 +91,7 @@ class LocalLLMGenerator:
                 "stream": True,
                 "options": {
                     "temperature": config.LLM_TEMPERATURE,
-                    "num_predict": config.LLM_MAX_NEW_TOKENS
+                    "num_predict": max_new_tokens or config.LLM_MAX_NEW_TOKENS
                 }
             }
             response = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True)
@@ -103,6 +105,7 @@ class LocalLLMGenerator:
                         print(token, end="", flush=True)
                         full_response += token
                     if chunk.get("done"):
+                        self.last_done_reason = chunk.get("done_reason")
                         break
             
             print("\n" + "-" * 50)
@@ -112,12 +115,13 @@ class LocalLLMGenerator:
             print(f"\nエラーが発生しました: {e}")
             return f"エラーが発生しました: {e}"
 
-    def generate_stream(self, query: str, retrieved_points: list, chat_history: list = None, model_name: str = None):
+    def generate_stream(self, query: str, retrieved_points: list, chat_history: list = None, model_name: str = None, max_new_tokens: int = None):
         """
         Streamlit 用にトークンを逐次 yield します。
         """
         target_model = model_name or self.model_name
         messages = self._prepare_messages(query, retrieved_points, chat_history)
+        self.last_done_reason = None
         
         try:
             payload = {
@@ -126,7 +130,7 @@ class LocalLLMGenerator:
                 "stream": True,
                 "options": {
                     "temperature": config.LLM_TEMPERATURE,
-                    "num_predict": config.LLM_MAX_NEW_TOKENS
+                    "num_predict": max_new_tokens or config.LLM_MAX_NEW_TOKENS
                 }
             }
             response = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=30)
@@ -145,6 +149,7 @@ class LocalLLMGenerator:
                     if "message" in chunk and "content" in chunk["message"]:
                         yield chunk["message"]["content"]
                     if chunk.get("done"):
+                        self.last_done_reason = chunk.get("done_reason")
                         break
                         
         except requests.exceptions.Timeout:

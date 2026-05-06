@@ -140,7 +140,8 @@ def main():
             available_models = generator.get_available_models()
             default_index = available_models.index(config.OLLAMA_MODEL_NAME) if config.OLLAMA_MODEL_NAME in available_models else 0
             selected_model = st.selectbox("Active Model", available_models, index=default_index)
-            limit = st.slider("Context Chunks", 1, 10, config.RETRIEVER_LIMIT)
+            limit = st.number_input("Context Chunks", min_value=1, value=config.RETRIEVER_LIMIT, step=1)
+            max_tokens = st.number_input("Max Output Tokens", min_value=128, value=config.LLM_MAX_NEW_TOKENS, step=128)
 
         st.divider()
 
@@ -208,10 +209,13 @@ def main():
                 history = st.session_state.messages[:-1]
                 
                 # results (ScoredPoint) をそのまま generator に渡す
-                for token in generator.generate_stream(prompt, results, chat_history=history, model_name=selected_model):
+                for token in generator.generate_stream(prompt, results, chat_history=history, model_name=selected_model, max_new_tokens=max_tokens):
                     full_response += token
                     response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
+
+                if generator.last_done_reason == "length":
+                    st.warning("⚠️ 最大出力トークン数に達したため、出力が途中で終了しました。")
                 
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
                 

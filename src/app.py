@@ -136,6 +136,14 @@ def main():
         
         st.divider()
         
+        with st.expander("⚙️ Settings"):
+            available_models = generator.get_available_models()
+            default_index = available_models.index(config.OLLAMA_MODEL_NAME) if config.OLLAMA_MODEL_NAME in available_models else 0
+            selected_model = st.selectbox("Active Model", available_models, index=default_index)
+            limit = st.slider("Context Chunks", 1, 10, config.RETRIEVER_LIMIT)
+
+        st.divider()
+
         # セッション管理
         if st.button("＋ New Chat", use_container_width=True):
             st.session_state.current_session_id = session_manager.create_session()
@@ -157,14 +165,6 @@ def main():
                     if st.session_state.current_session_id == s["id"]:
                         st.session_state.pop("current_session_id")
                     st.rerun()
-
-        st.divider()
-        
-        with st.expander("⚙️ Settings"):
-            available_models = generator.get_available_models()
-            default_index = available_models.index(config.OLLAMA_MODEL_NAME) if config.OLLAMA_MODEL_NAME in available_models else 0
-            selected_model = st.selectbox("Active Model", available_models, index=default_index)
-            limit = st.slider("Context Chunks", 1, 10, config.RETRIEVER_LIMIT)
 
     # メインエリア
     st.title(session_data.get("name", "New Chat"))
